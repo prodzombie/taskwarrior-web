@@ -28,6 +28,5 @@ dist-ssr
 /data_edit.json
 /.env
 /tailwindcss
-/frontend/package-lock.json
 /lcov.info
 /coverage
