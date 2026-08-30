@@ -18,6 +18,7 @@ use listenfd::ListenFd;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::string::ToString;
+use std::time::Duration;
 use taskchampion::Uuid;
 use taskwarrior_web::backend::task::{TaskOperation, get_project_list};
 use taskwarrior_web::core::app::{AppState, get_default_context};
@@ -36,6 +37,8 @@ use taskwarrior_web::endpoints::tasks::{
 };
 use taskwarrior_web::{FlashMsg, FlashMsgRoles, NewTask, TEMPLATES, TWGlobalState, TaskActions, task_query_merge_previous_params, task_query_previous_params, DIST_CONTENT};
 use tokio::net::TcpListener;
+use tokio::process::Command;
+use tokio::time::{MissedTickBehavior, interval};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::{Level, error, info, trace};
 use tracing_subscriber::layer::SubscriberExt;
@@ -71,6 +74,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let app_settings = AppState::default();
+    if app_settings.sync_interval > 0 {
+        tokio::spawn(sync_loop(app_settings.sync_interval as u64));
+    }
 
     // build our application with a route
     let app = Router::new()
@@ -128,14 +134,24 @@ async fn get_task_action_bar(app_state: State<AppState>) -> Html<String> {
     Html(TEMPLATES.render("task_action_bar.html", &ctx).unwrap())
 }
 
-async fn check_and_sync(app_state: State<AppState>) -> Html<String> {
-    // will perform a sync operation
-    if app_state.sync_interval > 0 {
-        // TODO: check sync status
+async fn sync_loop(seconds: u64) {
+    let mut timer = interval(Duration::from_secs(seconds));
+    timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-        // TODO: Show update available message, need a direct keyboard shortcut to perform update
-        return Html("Task Update available".to_string());
+    loop {
+        timer.tick().await;
+        match Command::new("task").arg("sync").output().await {
+            Ok(output) if output.status.success() => info!("Taskwarrior sync completed"),
+            Ok(output) => error!(
+                "Taskwarrior sync failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+            Err(error) => error!("Failed to start Taskwarrior sync: {error}"),
+        }
     }
+}
+
+async fn check_and_sync() -> Html<String> {
     Html(String::new())
 }
 
