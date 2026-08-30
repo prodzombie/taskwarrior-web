@@ -29,6 +29,7 @@
               pkgs.nodejs
               pkgs.npmHooks.npmConfigHook
             ];
+            nativeCheckInputs = [ pkgs.bash ];
 
             env.TASKWARRIOR_WEB_SKIP_NPM_INSTALL = "1";
 

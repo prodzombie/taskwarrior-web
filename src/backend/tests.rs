@@ -11,6 +11,7 @@ use crate::NewTask;
 use crate::core::app::AppState;
 use crate::endpoints::tasks::task_add;
 use crate::get_random_appstate;
+use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -30,7 +31,11 @@ async fn check_hook_file_execution() -> anyhow::Result<()> {
     let hooks_dir = app_state.task_hooks_path.as_ref().unwrap();
     let hook_file = hooks_dir.join("on-add.task");
     let gen_file = hooks_dir.join("on_add_hook_called");
-    let content = format!("#!/bin/bash\ntouch \"{}\"", gen_file.display());
+    let bash = env::split_paths(&env::var_os("PATH").unwrap_or_default())
+        .map(|path| path.join("bash"))
+        .find(|path| path.is_file())
+        .ok_or_else(|| anyhow::anyhow!("bash is not available in PATH"))?;
+    let content = format!("#!{}\ntouch \"{}\"", bash.display(), gen_file.display());
     fs::create_dir_all(hooks_dir)?;
     {
         let mut file = File::create(&hook_file)?;
